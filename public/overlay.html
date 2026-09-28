@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MS Yayın Overlay</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;color:white;font-family:Arial,sans-serif}
+.wrap{width:100%;height:100%;display:grid;place-items:center}.box{min-width:420px;max-width:90vw;background:rgba(7,9,13,.92);border:1px solid rgba(255,255,255,.15);border-radius:22px;padding:26px;box-shadow:0 25px 70px rgba(0,0,0,.35);text-align:center}
+.title{font-size:25px;font-weight:900;margin-bottom:10px}.big{font-size:58px;font-weight:900}.muted{color:#9da5b5}.row{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:19px}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="box" id="box"><div class="muted">Bağlanıyor...</div></div></div>
+<script>
+const query = new URLSearchParams(window.location.search);
+const room = (query.get("room") || "").toUpperCase();
+const type = (query.get("type") || "all").toLowerCase();
+const socket = io();
+socket.emit("join",room);
+
+function esc(value){
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function render(s){
+  const box = document.getElementById("box");
+  if(type === "puanlama"){
+    const left = s.scoring ? Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)) : 0;
+    box.innerHTML =
+      '<div class="title">⭐ PUANLAMA</div><div class="big">' + s.average + '</div>' +
+      '<div>' + s.participants + ' katılımcı</div><div class="muted">' + (s.scoring ? left+" sn" : "Beklemede") + '</div>';
+    return;
+  }
+  if(type === "racon"){
+    const g = s.lastGift && s.lastGift.type === "racon" ? s.lastGift : null;
+    box.innerHTML = '<div class="title">👑 RACON KRALI</div>' +
+      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
+    return;
+  }
+  if(type === "mekan"){
+    const g = s.lastGift && s.lastGift.type === "mekan" ? s.lastGift : null;
+    box.innerHTML = '<div class="title">🏠 MEKAN SAHİBİ</div>' +
+      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
+    return;
+  }
+  if(type === "begeni"){
+    const rows=(s.likes||[]).slice(0,10).map((x,i)=>
+      '<div class="row"><span>'+(i+1)+'. @'+esc(x.username)+'</span><b>'+Number(x.likeCount).toLocaleString("tr-TR")+' ❤️</b></div>'
+    ).join("");
+    box.innerHTML='<div class="title">❤️ BEĞENİ SIRALAMASI</div>'+ (rows || '<div class="muted">Henüz beğeni yok.</div>');
+    return;
+  }
+  if(type === "win"){
+    box.innerHTML='<div class="title">🏆 WIN</div><div class="big">'+String(s.wins).padStart(2,"0")+'/20</div>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="title">🔥 MS YAYIN</div><div class="big">⭐ '+s.average+'</div>' +
+    '<div>'+s.participants+' katılımcı</div><div class="muted">🏆 WIN '+String(s.wins).padStart(2,"0")+'/20</div>';
+}
+
+socket.on("state", state => { if(state.room === room) render(state); });
+</script>
+</body>
+</html>
