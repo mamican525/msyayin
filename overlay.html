@@ -1,7 +1,67 @@
-<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MS YAYIN OVERLAY</title><style>
-*{box-sizing:border-box}body{margin:0;background:transparent;color:#fff;font-family:Arial,sans-serif}.wrap{min-height:100vh;display:grid;place-items:center;padding:20px}.box{min-width:420px;max-width:92vw;background:rgba(7,8,12,.9);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:24px 28px;box-shadow:0 25px 70px rgba(0,0,0,.4);text-align:center}.title{font-size:26px;font-weight:900;margin-bottom:10px}.big{font-size:56px;font-weight:900}.item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:20px}.muted{opacity:.7;font-size:13px}
-</style></head><body><div class="wrap"><div class="box" id="box"><div class="muted">Bekleniyor...</div></div></div><script>
-const p=new URLSearchParams(location.search);const room=(p.get('room')||'').toUpperCase();const type=location.pathname.split('/').pop()||'all';const box=document.getElementById('box');const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-async function refresh(){if(!room)return;try{const s=await fetch('/api/state?room='+encodeURIComponent(room),{cache:'no-store'}).then(r=>r.json());let h='';if(type==='puanlama'){const left=s.scoring?Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)):0;h='<div class="title">⭐ PUANLAMA</div><div class="big">'+(s.average||0)+'</div><div>'+s.participants+' katılımcı · '+(s.scoring?left+' sn':'Beklemede')+'</div>';}else if(type==='racon'){h='<div class="title">👑 RACON KRALLARI</div>'+((s.raconMembers||[]).slice(0,10).map((m,i)=>'<div class="item">'+(i<3?['🥇','🥈','🥉'][i]:i+1)+ ' @'+esc(m.username)+' — '+m.count+'x</div>').join('')||'<div class="muted">Henüz veri yok.</div>');}else if(type==='mekan'){h='<div class="title">🏠 MEKAN SAHİBİ</div>'+((s.mekanMembers||[]).slice(0,10).map((m,i)=>'<div class="item">'+(i<3?['🥇','🥈','🥉'][i]:i+1)+ ' @'+esc(m.username)+' — '+m.count+'x</div>').join('')||'<div class="muted">Henüz veri yok.</div>');}else if(type==='begeni'){h='<div class="title">❤️ BEĞENİ SIRALAMASI</div>'+((s.likes||[]).slice(0,10).map((m,i)=>'<div class="item">'+(i<3?['🥇','🥈','🥉'][i]:i+1)+ ' @'+esc(m.username)+' — '+Number(m.likeCount).toLocaleString('tr-TR')+' ❤️</div>').join('')||'<div class="muted">Henüz veri yok.</div>');}else if(type==='win'){h='<div class="title">🏆 WIN</div><div class="big">'+String(s.wins||0).padStart(2,'0')+'/20</div>';}else{h='<div class="title">🔥 MS YAYIN</div><div>⭐ '+(s.average||0)+' · ❤️ '+(s.likes||[]).length+' kişi · 🏆 '+String(s.wins||0).padStart(2,'0')+'/20</div>'+(s.lastGift?'<div class="item">🎁 @'+esc(s.lastGift.username)+' — '+esc(s.lastGift.gift)+'</div>':'');}box.innerHTML=h||'<div class="muted">Henüz veri yok.</div>';}catch(e){box.innerHTML='<div class="muted">Bağlantı bekleniyor...</div>';}}
-refresh();setInterval(refresh,1000);
-</script></body></html>
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MS Yayın Overlay</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;color:white;font-family:Arial,sans-serif}
+.wrap{width:100%;height:100%;display:grid;place-items:center}.box{min-width:420px;max-width:90vw;background:rgba(7,9,13,.92);border:1px solid rgba(255,255,255,.15);border-radius:22px;padding:26px;box-shadow:0 25px 70px rgba(0,0,0,.35);text-align:center}
+.title{font-size:25px;font-weight:900;margin-bottom:10px}.big{font-size:58px;font-weight:900}.muted{color:#9da5b5}.row{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:19px}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="box" id="box"><div class="muted">Bağlanıyor...</div></div></div>
+<script>
+const query = new URLSearchParams(window.location.search);
+const room = (query.get("room") || "").toUpperCase();
+const type = (query.get("type") || "all").toLowerCase();
+const socket = io();
+socket.emit("join",room);
+
+function esc(value){
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function render(s){
+  const box = document.getElementById("box");
+  if(type === "puanlama"){
+    const left = s.scoring ? Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)) : 0;
+    box.innerHTML =
+      '<div class="title">⭐ PUANLAMA</div><div class="big">' + s.average + '</div>' +
+      '<div>' + s.participants + ' katılımcı</div><div class="muted">' + (s.scoring ? left+" sn" : "Beklemede") + '</div>';
+    return;
+  }
+  if(type === "racon"){
+    const g = s.lastGift && s.lastGift.type === "racon" ? s.lastGift : null;
+    box.innerHTML = '<div class="title">👑 RACON KRALI</div>' +
+      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
+    return;
+  }
+  if(type === "mekan"){
+    const g = s.lastGift && s.lastGift.type === "mekan" ? s.lastGift : null;
+    box.innerHTML = '<div class="title">🏠 MEKAN SAHİBİ</div>' +
+      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
+    return;
+  }
+  if(type === "begeni"){
+    const rows=(s.likes||[]).slice(0,10).map((x,i)=>
+      '<div class="row"><span>'+(i+1)+'. @'+esc(x.username)+'</span><b>'+Number(x.likeCount).toLocaleString("tr-TR")+' ❤️</b></div>'
+    ).join("");
+    box.innerHTML='<div class="title">❤️ BEĞENİ SIRALAMASI</div>'+ (rows || '<div class="muted">Henüz beğeni yok.</div>');
+    return;
+  }
+  if(type === "win"){
+    box.innerHTML='<div class="title">🏆 WIN</div><div class="big">'+String(s.wins).padStart(2,"0")+'/20</div>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="title">🔥 MS YAYIN</div><div class="big">⭐ '+s.average+'</div>' +
+    '<div>'+s.participants+' katılımcı</div><div class="muted">🏆 WIN '+String(s.wins).padStart(2,"0")+'/20</div>';
+}
+
+socket.on("state", state => { if(state.room === room) render(state); });
+</script>
+</body>
+</html>
