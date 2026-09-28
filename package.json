@@ -1,16 +1,13 @@
 {
   "name": "msyayin",
-  "version": "8.0.0",
+  "version": "10.0.0",
   "private": true,
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
     "express": "^4.21.2",
-    "tiktok-live-connector": "1.2.2"
+    "socket.io": "^4.8.1"
   }
 }
