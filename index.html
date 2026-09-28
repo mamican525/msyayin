@@ -1,0 +1,11 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MS Yayın</title><style>
+*{box-sizing:border-box}body{margin:0;background:#07080c;color:#fff;font-family:Arial,sans-serif}.wrap{min-height:100vh;display:grid;place-items:center;padding:24px}.card{width:min(680px,100%);background:#11141d;border:1px solid #292f3c;border-radius:22px;padding:32px;box-shadow:0 25px 80px #0008}.logo{font-size:28px;font-weight:900}.logo span{color:#e53935}.muted{color:#9299a8;line-height:1.6}.btn{border:0;background:#e53935;color:#fff;border-radius:12px;padding:14px 18px;font-weight:800;cursor:pointer}.btn:hover{filter:brightness(1.08)}.room{margin-top:16px;padding:15px;background:#0b0e14;border:1px dashed #3b4250;border-radius:12px;display:none}.room b{font-size:20px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+</style></head><body><div class="wrap"><div class="card"><div class="logo">🔥 MS <span>YAYIN</span></div><h1>Yayın Yönetim Sistemi</h1><p class="muted">Yeni yayın başlat. Room kodunu sistem otomatik oluşturur.</p><div class="actions"><button id="start" class="btn">🟢 YENİ YAYIN BAŞLAT</button></div><div id="room" class="room"></div></div></div>
+<script>
+document.getElementById('start').addEventListener('click', async () => {
+  const r = await fetch('/api/rooms',{method:'POST'}).then(x=>x.json());
+  if(!r.ok){alert(r.message||'Oda oluşturulamadı.');return;}
+  localStorage.setItem('ms_room',r.room);
+  location.href=r.panelUrl;
+});
+</script></body></html>
