@@ -6,62 +6,38 @@
 <title>MS Yayın Overlay</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;color:white;font-family:Arial,sans-serif}
-.wrap{width:100%;height:100%;display:grid;place-items:center}.box{min-width:420px;max-width:90vw;background:rgba(7,9,13,.92);border:1px solid rgba(255,255,255,.15);border-radius:22px;padding:26px;box-shadow:0 25px 70px rgba(0,0,0,.35);text-align:center}
-.title{font-size:25px;font-weight:900;margin-bottom:10px}.big{font-size:58px;font-weight:900}.muted{color:#9da5b5}.row{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:19px}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;color:#fff;font-family:Arial,sans-serif}.wrap{width:100%;height:100%;display:grid;place-items:center}.box{min-width:420px;max-width:90vw;padding:26px 30px;border-radius:22px;background:rgba(8,9,13,.88);border:1px solid rgba(255,255,255,.15);box-shadow:0 20px 70px rgba(0,0,0,.35);text-align:center}.title{font-size:28px;font-weight:900}.big{font-size:68px;font-weight:1000;margin:8px 0}.sub{color:#aeb5c2}.row{display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1)}.rank{font-weight:900}.flash{animation:flash .7s ease}.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}.piece{position:absolute;width:8px;height:18px;background:#fff;animation:fall 1.8s linear forwards}@keyframes fall{to{transform:translateY(110vh) rotate(540deg);opacity:0}}@keyframes flash{0%{transform:scale(.9);opacity:.2}60%{transform:scale(1.04);opacity:1}100%{transform:scale(1);opacity:1}}
 </style>
 </head>
 <body>
-<div class="wrap"><div class="box" id="box"><div class="muted">Bağlanıyor...</div></div></div>
+<div class="wrap"><div class="box" id="box"><div class="title">MS YAYIN</div><div class="sub">Bekleniyor...</div></div></div>
+<div class="confetti" id="confetti"></div>
 <script>
-const query = new URLSearchParams(window.location.search);
-const room = (query.get("room") || "").toUpperCase();
-const type = (query.get("type") || "all").toLowerCase();
-const socket = io();
-socket.emit("join",room);
-
-function esc(value){
-  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-
+const p=new URLSearchParams(location.search),room=(p.get("room")||"").toUpperCase(),type=p.get("type")||"puanlama";
+const socket=io();socket.emit("joinRoom",room);let lastScoring=false; let latestState=null;
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function confetti(){const c=document.getElementById("confetti");c.innerHTML="";for(let i=0;i<70;i++){const d=document.createElement("div");d.className="piece";d.style.left=Math.random()*100+"%";d.style.top="-30px";d.style.transform=`rotate(${Math.random()*360}deg)`;d.style.animationDelay=(Math.random()*.5)+"s";c.appendChild(d)}setTimeout(()=>c.innerHTML="",2500)}
 function render(s){
-  const box = document.getElementById("box");
-  if(type === "puanlama"){
-    const left = s.scoring ? Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)) : 0;
-    box.innerHTML =
-      '<div class="title">⭐ PUANLAMA</div><div class="big">' + s.average + '</div>' +
-      '<div>' + s.participants + ' katılımcı</div><div class="muted">' + (s.scoring ? left+" sn" : "Beklemede") + '</div>';
-    return;
-  }
-  if(type === "racon"){
-    const g = s.lastGift && s.lastGift.type === "racon" ? s.lastGift : null;
-    box.innerHTML = '<div class="title">👑 RACON KRALI</div>' +
-      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
-    return;
-  }
-  if(type === "mekan"){
-    const g = s.lastGift && s.lastGift.type === "mekan" ? s.lastGift : null;
-    box.innerHTML = '<div class="title">🏠 MEKAN SAHİBİ</div>' +
-      (g ? '<div class="big">@'+esc(g.username)+'</div><div>🎁 '+esc(g.gift)+'</div>' : '<div class="muted">Hediye bekleniyor...</div>');
-    return;
-  }
-  if(type === "begeni"){
-    const rows=(s.likes||[]).slice(0,10).map((x,i)=>
-      '<div class="row"><span>'+(i+1)+'. @'+esc(x.username)+'</span><b>'+Number(x.likeCount).toLocaleString("tr-TR")+' ❤️</b></div>'
-    ).join("");
-    box.innerHTML='<div class="title">❤️ BEĞENİ SIRALAMASI</div>'+ (rows || '<div class="muted">Henüz beğeni yok.</div>');
-    return;
-  }
-  if(type === "win"){
-    box.innerHTML='<div class="title">🏆 WIN</div><div class="big">'+String(s.wins).padStart(2,"0")+'/20</div>';
-    return;
-  }
-  box.innerHTML =
-    '<div class="title">🔥 MS YAYIN</div><div class="big">⭐ '+s.average+'</div>' +
-    '<div>'+s.participants+' katılımcı</div><div class="muted">🏆 WIN '+String(s.wins).padStart(2,"0")+'/20</div>';
+ const b=document.getElementById("box");
+ if(type==="puanlama"){
+   const left=s.scoring?Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)):0;
+   b.innerHTML=`<div class="title">⭐ PUANLAMA</div><div class="big">${s.scoring?s.average:"—"}</div><div class="sub">${s.scoring?left+" saniye · "+s.participants+" katılımcı":"Puanlama beklemede"}</div>`;
+ }else if(type==="racon"){
+   const x=s.raconList[0]; b.innerHTML=`<div class="title">👑 RACON KRALI</div><div class="big">${x?"@"+esc(x.username):"—"}</div>${x?`<div class="sub">🎁 ${esc(x.gift)}</div>`:"<div class=sub>Hediye bekleniyor</div>"}`;
+ }else if(type==="mekan"){
+   const x=s.mekanList[0]; b.innerHTML=`<div class="title">🏠 MEKAN SAHİBİ</div><div class="big">${x?"@"+esc(x.username):"—"}</div>${x?`<div class="sub">🎁 ${esc(x.gift)}</div>`:"<div class=sub>Hediye bekleniyor</div>"}`;
+ }else if(type==="begeni"){
+   b.innerHTML=`<div class="title">❤️ BEĞENİ SIRALAMASI</div>`+(s.likes.slice(0,10).map((x,i)=>`<div class="row"><span class="rank">${i+1}. @${esc(x.username)}</span><b>${Number(x.likeCount).toLocaleString("tr-TR")} ❤️</b></div>`).join("")||'<div class="sub">Bekleniyor...</div>');
+ }else if(type==="win"){
+   b.innerHTML=`<div class="title">🏆 WIN SAYACI</div><div class="big">${String(s.wins).padStart(2,"0")} / ${s.maxWins}</div><div class="sub">Ceza: ${s.penalties}</div>`;
+ }else{
+   b.innerHTML=`<div class="title">MS YAYIN</div><div class="sub">Room: ${esc(s.room)}</div>`;
+ }
+ if(s.scoring&&!lastScoring) confetti();
+ lastScoring=s.scoring;
 }
-
-socket.on("state", state => { if(state.room === room) render(state); });
+socket.on("state",s=>{latestState=s;render(s)});
+setInterval(()=>{if(latestState && type==="puanlama" && latestState.scoring) render(latestState)},500);
 </script>
 </body>
 </html>
