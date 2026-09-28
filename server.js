@@ -1,341 +1,357 @@
-const express = require("express");
-const http = require("http");
-const crypto = require("crypto");
-const { Server } = require("socket.io");
+const express = require('express');
+const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-const PORT = Number(process.env.PORT || 10000);
+const PORT = Number(process.env.PORT) || 10000;
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
-app.use(express.json({ limit: "256kb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static("public"));
+app.disable('x-powered-by');
+app.use(express.json({ limit: '256kb' }));
+app.use(express.urlencoded({ extended: false, limit: '256kb' }));
 
 const rooms = new Map();
-
-const DEFAULT_GIFTS = [
-  "Rose", "Finger Heart", "Galaxy", "TikTok Universe",
-  "Lion", "Fireworks", "GG", "Perfume"
-];
+const liveConnections = new Map();
 
 function cleanUser(value) {
-  return String(value || "").replace(/^@+/, "").trim().slice(0, 80);
+  return String(value || '').replace(/^@+/, '').trim() || 'bilinmeyen';
 }
 
 function makeRoomCode() {
   let code;
   do {
-    code = "MS-" + crypto.randomBytes(3).toString("hex").toUpperCase();
+    code = 'MS-' + crypto.randomBytes(3).toString('hex').toUpperCase();
   } while (rooms.has(code));
   return code;
 }
 
-function newRoom() {
+function makeRoom() {
   return {
-    room: null,
+    room: makeRoomCode(),
     createdAt: Date.now(),
+    username: '',
     connected: false,
-    tiktokUsername: "",
     scoreDuration: 15,
     scoring: false,
     scoreEndsAt: 0,
     votes: [],
     likes: new Map(),
-    giftRules: {
-      racon: "",
-      mekan: ""
-    },
-    giftHistory: [],
-    raconList: [],
-    mekanList: [],
+    raconRules: [],
+    mekanRules: [],
+    raconEntries: [],
+    mekanEntries: [],
     wins: 0,
-    maxWins: 20,
-    penalties: 0,
-    lastGift: null
+    penalty: 20,
+    lastGift: null,
+    ticker: '',
+    error: ''
   };
 }
 
-function getRoom(code) {
-  const key = String(code || "").trim().toUpperCase();
+function getRoom(roomCode) {
+  const key = String(roomCode || '').trim().toUpperCase();
   if (!key) return null;
-  if (!rooms.has(key)) {
-    const s = newRoom();
-    s.room = key;
-    rooms.set(key, s);
-  }
-  return rooms.get(key);
+  return rooms.get(key) || null;
 }
 
-function publicState(s) {
-  const voteCount = s.votes.length;
-  const average = voteCount
-    ? Number((s.votes.reduce((sum, v) => sum + v.score, 0) / voteCount).toFixed(2))
-    : 0;
+function ensureRoom(roomCode) {
+  let room = getRoom(roomCode);
+  if (!room) {
+    room = makeRoom();
+    if (roomCode) room.room = String(roomCode).trim().toUpperCase();
+    rooms.set(room.room, room);
+  }
+  return room;
+}
 
-  const participants = new Set(s.votes.map(v => v.username)).size;
+function uniqueParticipants(room) {
+  return new Set(room.votes.map(v => v.username)).size;
+}
 
-  const likes = [...s.likes.entries()]
-    .map(([username, value]) => ({
-      username,
-      likeCount: Number(value?.likeCount || 0),
-      avatarUrl: value?.avatarUrl || ""
-    }))
-    .sort((a,b) => b.likeCount - a.likeCount)
-    .slice(0, 100);
+function averageScore(room) {
+  if (!room.votes.length) return 0;
+  const sum = room.votes.reduce((total, v) => total + v.score, 0);
+  return Number((sum / room.votes.length).toFixed(2));
+}
 
+function serializeRoom(room) {
   return {
-    room: s.room,
-    createdAt: s.createdAt,
-    connected: s.connected,
-    tiktokUsername: s.tiktokUsername,
-    scoreDuration: s.scoreDuration,
-    scoring: s.scoring,
-    scoreEndsAt: s.scoreEndsAt,
-    average,
-    participants,
-    votes: s.votes.slice(-100).reverse(),
-    likes,
-    giftRules: s.giftRules,
-    giftHistory: s.giftHistory.slice(-50).reverse(),
-    raconList: s.raconList.slice(-50).reverse(),
-    mekanList: s.mekanList.slice(-50).reverse(),
-    wins: s.wins,
-    maxWins: s.maxWins,
-    penalties: s.penalties,
-    lastGift: s.lastGift
+    room: room.room,
+    createdAt: room.createdAt,
+    username: room.username,
+    connected: room.connected,
+    scoreDuration: room.scoreDuration,
+    scoring: room.scoring,
+    scoreEndsAt: room.scoreEndsAt,
+    average: averageScore(room),
+    participants: uniqueParticipants(room),
+    votes: room.votes.slice(-100).reverse(),
+    raconRules: [...room.raconRules],
+    mekanRules: [...room.mekanRules],
+    raconEntries: room.raconEntries.slice(-100).reverse(),
+    mekanEntries: room.mekanEntries.slice(-100).reverse(),
+    likes: [...room.likes.entries()]
+      .map(([username, likeCount]) => ({ username, likeCount }))
+      .sort((a, b) => b.likeCount - a.likeCount)
+      .slice(0, 100),
+    wins: room.wins,
+    penalty: room.penalty,
+    lastGift: room.lastGift,
+    ticker: room.ticker,
+    error: room.error
   };
 }
 
-function broadcast(s) {
-  io.to(s.room).emit("state", publicState(s));
+function getRuleForGift(room, giftName) {
+  const normalized = String(giftName || '').trim().toLocaleLowerCase('tr-TR');
+  if (!normalized) return null;
+  if (room.raconRules.some(x => x.toLocaleLowerCase('tr-TR') === normalized)) return 'racon';
+  if (room.mekanRules.some(x => x.toLocaleLowerCase('tr-TR') === normalized)) return 'mekan';
+  return null;
 }
 
-function addLike(s, username, count, avatarUrl = "") {
-  username = cleanUser(username) || "bilinmeyen";
-  count = Math.max(1, Math.floor(Number(count) || 1));
-
-  const previous = s.likes.get(username);
-  if (previous && typeof previous === "object") {
-    previous.likeCount += count;
+function addEntry(list, username, giftName) {
+  const existing = list.find(item => item.username === username && item.gift === giftName);
+  if (existing) {
+    existing.count += 1;
+    existing.time = Date.now();
   } else {
-    s.likes.set(username, { likeCount: count, avatarUrl });
+    list.push({ username, gift: giftName, count: 1, time: Date.now() });
   }
 }
 
-function addVote(s, username, score) {
-  username = cleanUser(username) || "bilinmeyen";
-  score = Math.max(1, Math.min(10, Math.floor(Number(score) || 1)));
-  s.votes.push({ username, score, time: Date.now() });
+function processGift(room, username, giftName) {
+  const category = getRuleForGift(room, giftName);
+  room.lastGift = { username, gift: giftName, category: category || 'none', time: Date.now() };
+  if (category === 'racon') addEntry(room.raconEntries, username, giftName);
+  if (category === 'mekan') addEntry(room.mekanEntries, username, giftName);
+  room.ticker = `@${username} • ${giftName}`;
 }
 
-function triggerGift(s, username, gift, avatarUrl = "", forcedType = "") {
-  username = cleanUser(username) || "bilinmeyen";
-  gift = String(gift || "").trim().slice(0, 100) || "Hediye";
+function processVote(room, username, rawText) {
+  if (!room.scoring) return false;
+  const match = String(rawText || '').match(/\b(10|[1-9])\b/);
+  if (!match) return false;
+  const score = Number(match[1]);
+  room.votes.push({ username, score, comment: String(rawText || ''), time: Date.now() });
+  return true;
+}
 
-  let type = forcedType || "";
-  if (!type) {
-    if (s.giftRules.racon && s.giftRules.racon.toLowerCase() === gift.toLowerCase()) type = "racon";
-    if (s.giftRules.mekan && s.giftRules.mekan.toLowerCase() === gift.toLowerCase()) type = "mekan";
+function processLike(room, username, count) {
+  const n = Math.max(1, Number(count) || 1);
+  room.likes.set(username, (room.likes.get(username) || 0) + n);
+}
+
+async function loadTikTokConnector() {
+  try {
+    const mod = await import('tiktok-live-connector');
+    return mod.WebcastPushConnection || mod.default?.WebcastPushConnection || mod.default || null;
+  } catch (dynamicError) {
+    try {
+      const mod = require('tiktok-live-connector');
+      return mod.WebcastPushConnection || mod.default?.WebcastPushConnection || mod.default || mod || null;
+    } catch (requireError) {
+      return null;
+    }
+  }
+}
+
+function getUserFromEvent(data) {
+  return cleanUser(data?.uniqueId || data?.username || data?.nickname || data?.user?.uniqueId);
+}
+
+async function connectTikTok(room, username) {
+  const Connector = await loadTikTokConnector();
+  if (typeof Connector !== 'function') {
+    throw new Error('TikTok bağlantı modülü yüklenemedi. Panel çalışır; TikTok bağlantı modülü bu sunucuda kullanılamıyor.');
   }
 
-  const item = {
-    id: crypto.randomBytes(4).toString("hex"),
-    username,
-    gift,
-    avatarUrl,
-    type,
-    time: Date.now()
+  const previous = liveConnections.get(room.room);
+  if (previous?.connection && typeof previous.connection.disconnect === 'function') {
+    try { await previous.connection.disconnect(); } catch (_) {}
+  }
+
+  const connection = new Connector(username, { processInitialData: false });
+  const holder = { connection };
+  liveConnections.set(room.room, holder);
+  room.username = username;
+  room.error = '';
+
+  const markConnected = () => {
+    room.connected = true;
+    room.error = '';
+  };
+  const markDisconnected = () => {
+    room.connected = false;
+  };
+  const markError = err => {
+    room.connected = false;
+    room.error = err?.message || String(err || 'TikTok bağlantı hatası');
   };
 
-  s.giftHistory.push(item);
-  s.lastGift = item;
+  if (typeof connection.on === 'function') {
+    connection.on('connected', markConnected);
+    connection.on('disconnected', markDisconnected);
+    connection.on('error', markError);
 
-  if (type === "racon") s.raconList.push(item);
-  if (type === "mekan") s.mekanList.push(item);
+    connection.on('chat', data => {
+      const user = getUserFromEvent(data);
+      const text = String(data?.comment || '').trim();
+      processVote(room, user, text);
+    });
+
+    connection.on('like', data => {
+      const user = getUserFromEvent(data);
+      const count = Number(data?.likeCount || data?.totalLikeCount || 1) || 1;
+      processLike(room, user, count);
+    });
+
+    connection.on('gift', data => {
+      const user = getUserFromEvent(data);
+      const giftName = String(data?.giftName || data?.gift || data?.repeatEnd || 'Hediye').trim();
+      processGift(room, user, giftName);
+    });
+  }
+
+  await connection.connect();
+  room.connected = true;
+  return true;
 }
 
-function createRoomHandler(req, res) {
-  const code = makeRoomCode();
-  getRoom(code);
-  res.json({ ok: true, room: code, panelUrl: `/panel?room=${encodeURIComponent(code)}` });
-}
-
-app.get("/", (req, res) => {
-  res.sendFile("index.html", { root: "public" });
-});
-
-app.get("/panel", (req, res) => {
-  res.sendFile("panel.html", { root: "public" });
-});
-
-app.get("/overlay", (req, res) => {
-  res.sendFile("overlay.html", { root: "public" });
-});
-
-app.get("/api/room", createRoomHandler);
-
-app.post("/api/room", createRoomHandler);
-
-app.get("/api/state", (req, res) => {
-  const state = getRoom(req.query.room);
-  if (!state) return res.status(400).json({ ok: false, error: "Room gerekli." });
-  res.json({ ok: true, state: publicState(state) });
-});
-
-app.post("/api/settings/duration", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  const duration = Math.max(1, Math.min(3600, Math.floor(Number(req.body.duration) || 15)));
-  s.scoreDuration = duration;
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
-});
-
-app.post("/api/score/start", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-
-  s.votes = [];
-  s.scoring = true;
-  s.scoreEndsAt = Date.now() + s.scoreDuration * 1000;
-  broadcast(s);
-
+function scheduleScoreStop(room) {
+  const remaining = Math.max(0, room.scoreEndsAt - Date.now());
   setTimeout(() => {
-    if (s.scoring && Date.now() >= s.scoreEndsAt) {
-      s.scoring = false;
-      s.scoreEndsAt = 0;
-      broadcast(s);
+    if (room.scoring && Date.now() >= room.scoreEndsAt) {
+      room.scoring = false;
+      room.scoreEndsAt = 0;
     }
-  }, s.scoreDuration * 1000 + 150);
+  }, remaining + 50);
+}
 
-  res.json({ ok:true, state:publicState(s) });
+// ---------- API: these routes are intentionally declared BEFORE any catch-all HTML route ----------
+
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, service: 'msyayin', rooms: rooms.size, now: Date.now() });
 });
 
-app.post("/api/score/stop", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  s.scoring = false;
-  s.scoreEndsAt = 0;
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
+app.post('/api/rooms', (_req, res) => {
+  const room = makeRoom();
+  rooms.set(room.room, room);
+  res.status(201).json({ ok: true, room: room.room });
 });
 
-app.post("/api/gift-rule", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  const type = req.body.type === "mekan" ? "mekan" : "racon";
-  s.giftRules[type] = String(req.body.gift || "").trim().slice(0,100);
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
+app.get('/api/state', (req, res) => {
+  const room = getRoom(req.query.room);
+  if (!room) return res.status(404).json({ ok: false, error: 'ROOM bulunamadı.' });
+  res.json({ ok: true, state: serializeRoom(room) });
 });
 
-app.post("/api/tiktok-user", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  s.tiktokUsername = cleanUser(req.body.username);
-  s.connected = false;
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
+app.post('/api/settings', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  if (req.body.duration !== undefined) room.scoreDuration = Math.max(1, Math.min(3600, Number(req.body.duration) || 15));
+  if (req.body.penalty !== undefined) room.penalty = Math.max(0, Number(req.body.penalty) || 20);
+  res.json({ ok: true, state: serializeRoom(room) });
 });
 
-app.post("/api/reset/likes", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  s.likes.clear();
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
+app.post('/api/score/start', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  room.scoring = true;
+  room.votes = [];
+  room.scoreEndsAt = Date.now() + room.scoreDuration * 1000;
+  scheduleScoreStop(room);
+  res.json({ ok: true, state: serializeRoom(room) });
 });
 
-app.post("/api/win", (req, res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
+app.post('/api/score/stop', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  room.scoring = false;
+  room.scoreEndsAt = 0;
+  res.json({ ok: true, state: serializeRoom(room) });
+});
 
-  const change = Math.floor(Number(req.body.change) || 0);
-  if (change === 0) {
-    s.wins = 0;
-    s.penalties = 0;
-  } else {
-    s.wins = Math.max(0, Math.min(s.maxWins, s.wins + change));
-    if (change < 0) s.penalties += Math.abs(change);
+app.post('/api/rules', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  const gift = String(req.body.gift || '').trim();
+  const category = req.body.category === 'mekan' ? 'mekan' : 'racon';
+  if (!gift) return res.status(400).json({ ok: false, error: 'Hediye seçilmedi.' });
+  const target = category === 'racon' ? room.raconRules : room.mekanRules;
+  if (!target.includes(gift)) target.push(gift);
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.delete('/api/rules', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  const gift = String(req.body.gift || '').trim();
+  const category = req.body.category === 'mekan' ? 'mekan' : 'racon';
+  const target = category === 'racon' ? room.raconRules : room.mekanRules;
+  const filtered = target.filter(x => x !== gift);
+  if (category === 'racon') room.raconRules = filtered; else room.mekanRules = filtered;
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/likes/reset', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  room.likes.clear();
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/win', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  const change = Number(req.body.change) || 0;
+  if (req.body.reset) room.wins = 0;
+  else room.wins = Math.max(0, Math.min(20, room.wins + change));
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/test/vote', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  const wasScoring = room.scoring;
+  if (!wasScoring) room.scoring = true;
+  const username = cleanUser(req.body.username);
+  const scoreText = String(req.body.score || '10');
+  processVote(room, username, scoreText);
+  if (!wasScoring) room.scoring = false;
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/test/like', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  processLike(room, cleanUser(req.body.username), req.body.count);
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/test/gift', (req, res) => {
+  const room = ensureRoom(req.body.room);
+  processGift(room, cleanUser(req.body.username), String(req.body.gift || 'Galaxy').trim());
+  res.json({ ok: true, state: serializeRoom(room) });
+});
+
+app.post('/api/connect', async (req, res) => {
+  const room = ensureRoom(req.body.room);
+  const username = cleanUser(req.body.username);
+  if (!username || username === 'bilinmeyen') return res.status(400).json({ ok: false, error: 'TikTok kullanıcı adı gerekli.' });
+  try {
+    await connectTikTok(room, username);
+    res.json({ ok: true, message: 'TikTok bağlantısı kuruldu.', state: serializeRoom(room) });
+  } catch (error) {
+    room.connected = false;
+    room.error = error?.message || String(error);
+    res.status(500).json({ ok: false, error: room.error, state: serializeRoom(room) });
   }
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
 });
 
-app.post("/api/test/vote", (req,res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  if (!s.scoring) return res.status(400).json({ ok:false, error:"Önce puanlamayı başlat." });
-  addVote(s, req.body.username, req.body.score);
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
+// Static assets come after API routes.
+app.use(express.static(PUBLIC_DIR, { extensions: ['html'] }));
+
+app.get('/panel', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'panel.html')));
+app.get('/overlay', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'overlay.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
+
+app.use((req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'API adresi bulunamadı.' });
+  res.status(404).send('Sayfa bulunamadı.');
 });
 
-app.post("/api/test/like", (req,res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  addLike(s, req.body.username, req.body.count, req.body.avatarUrl);
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
-});
-
-app.post("/api/test/gift", (req,res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ ok:false, error:"Room gerekli." });
-  triggerGift(s, req.body.username, req.body.gift, req.body.avatarUrl, req.body.type);
-  broadcast(s);
-  res.json({ ok:true, state:publicState(s) });
-});
-
-// Adapter endpoint: later a verified TikTok event source can POST real events here.
-// Keeping this endpoint independent means the UI/overlays do not break when the provider changes.
-app.post("/api/events", (req,res) => {
-  const s = getRoom(req.body.room);
-  if (!s) return res.status(400).json({ok:false,error:"Room gerekli."});
-
-  const type = String(req.body.type || "").toLowerCase();
-  const username = req.body.username;
-  const avatarUrl = req.body.avatarUrl || "";
-
-  if (type === "like") {
-    addLike(s, username, req.body.count, avatarUrl);
-  } else if (type === "gift") {
-    triggerGift(s, username, req.body.gift, avatarUrl);
-  } else if (type === "vote" && s.scoring) {
-    addVote(s, username, req.body.score);
-  } else {
-    return res.status(400).json({ok:false,error:"Desteklenen olaylar: like, gift, vote"});
-  }
-
-  broadcast(s);
-  res.json({ok:true});
-});
-
-app.get("/api/gifts", (req,res) => {
-  res.json({ ok:true, gifts: DEFAULT_GIFTS });
-});
-
-io.on("connection", socket => {
-  socket.on("joinRoom", room => {
-    const code = String(room || "").trim().toUpperCase();
-    const s = getRoom(code);
-    if (!s) return;
-    socket.join(code);
-    socket.emit("state", publicState(s));
-  });
-});
-
-setInterval(() => {
-  for (const s of rooms.values()) {
-    if (s.scoring && s.scoreEndsAt && Date.now() >= s.scoreEndsAt) {
-      s.scoring = false;
-      s.scoreEndsAt = 0;
-      broadcast(s);
-    }
-  }
-}, 500);
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`MS Yayın v2 running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`MS Yayin running on port ${PORT}`);
 });

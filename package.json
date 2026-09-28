@@ -2,12 +2,16 @@
   "name": "msyayin",
   "version": "2.0.0",
   "private": true,
-  "type": "commonjs",
+  "description": "MS Yayin - TikTok live control panel and overlays",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "express": "4.21.2",
-    "socket.io": "4.8.1"
+    "express": "^4.21.2",
+    "tiktok-live-connector": "latest"
   }
 }

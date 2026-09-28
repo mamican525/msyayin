@@ -1,43 +1,28 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MS Yayın Overlay</title>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;color:#fff;font-family:Arial,sans-serif}.wrap{width:100%;height:100%;display:grid;place-items:center}.box{min-width:420px;max-width:90vw;padding:26px 30px;border-radius:22px;background:rgba(8,9,13,.88);border:1px solid rgba(255,255,255,.15);box-shadow:0 20px 70px rgba(0,0,0,.35);text-align:center}.title{font-size:28px;font-weight:900}.big{font-size:68px;font-weight:1000;margin:8px 0}.sub{color:#aeb5c2}.row{display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1)}.rank{font-weight:900}.flash{animation:flash .7s ease}.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}.piece{position:absolute;width:8px;height:18px;background:#fff;animation:fall 1.8s linear forwards}@keyframes fall{to{transform:translateY(110vh) rotate(540deg);opacity:0}}@keyframes flash{0%{transform:scale(.9);opacity:.2}60%{transform:scale(1.04);opacity:1}100%{transform:scale(1);opacity:1}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MS Yayın Overlay</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>body{background:transparent;overflow:hidden}.overlay-stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.overlay-card{min-width:360px;max-width:92vw;background:rgba(8,9,14,.90);border:1px solid rgba(255,255,255,.16);border-radius:24px;padding:26px;box-shadow:0 20px 80px rgba(0,0,0,.38);text-align:center}.overlay-title{font-size:22px;font-weight:800}.overlay-big{font-size:64px;font-weight:950;margin:12px 0}.overlay-sub{color:#aeb5c6}.rank-line{display:flex;justify-content:space-between;gap:20px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.1)}.rank-line:last-child{border-bottom:0}.pulse{animation:pulse .65s ease}@keyframes pulse{50%{transform:scale(1.04);filter:brightness(1.25)}}</style>
 </head>
 <body>
-<div class="wrap"><div class="box" id="box"><div class="title">MS YAYIN</div><div class="sub">Bekleniyor...</div></div></div>
-<div class="confetti" id="confetti"></div>
+<div class="overlay-stage"><div id="overlay" class="overlay-card"><div class="overlay-title">🔥 MS YAYIN</div><div class="overlay-sub">Bekleniyor...</div></div></div>
 <script>
-const p=new URLSearchParams(location.search),room=(p.get("room")||"").toUpperCase(),type=p.get("type")||"puanlama";
-const socket=io();socket.emit("joinRoom",room);let lastScoring=false; let latestState=null;
-function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
-function confetti(){const c=document.getElementById("confetti");c.innerHTML="";for(let i=0;i<70;i++){const d=document.createElement("div");d.className="piece";d.style.left=Math.random()*100+"%";d.style.top="-30px";d.style.transform=`rotate(${Math.random()*360}deg)`;d.style.animationDelay=(Math.random()*.5)+"s";c.appendChild(d)}setTimeout(()=>c.innerHTML="",2500)}
-function render(s){
- const b=document.getElementById("box");
- if(type==="puanlama"){
-   const left=s.scoring?Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)):0;
-   b.innerHTML=`<div class="title">⭐ PUANLAMA</div><div class="big">${s.scoring?s.average:"—"}</div><div class="sub">${s.scoring?left+" saniye · "+s.participants+" katılımcı":"Puanlama beklemede"}</div>`;
- }else if(type==="racon"){
-   const x=s.raconList[0]; b.innerHTML=`<div class="title">👑 RACON KRALI</div><div class="big">${x?"@"+esc(x.username):"—"}</div>${x?`<div class="sub">🎁 ${esc(x.gift)}</div>`:"<div class=sub>Hediye bekleniyor</div>"}`;
- }else if(type==="mekan"){
-   const x=s.mekanList[0]; b.innerHTML=`<div class="title">🏠 MEKAN SAHİBİ</div><div class="big">${x?"@"+esc(x.username):"—"}</div>${x?`<div class="sub">🎁 ${esc(x.gift)}</div>`:"<div class=sub>Hediye bekleniyor</div>"}`;
- }else if(type==="begeni"){
-   b.innerHTML=`<div class="title">❤️ BEĞENİ SIRALAMASI</div>`+(s.likes.slice(0,10).map((x,i)=>`<div class="row"><span class="rank">${i+1}. @${esc(x.username)}</span><b>${Number(x.likeCount).toLocaleString("tr-TR")} ❤️</b></div>`).join("")||'<div class="sub">Bekleniyor...</div>');
- }else if(type==="win"){
-   b.innerHTML=`<div class="title">🏆 WIN SAYACI</div><div class="big">${String(s.wins).padStart(2,"0")} / ${s.maxWins}</div><div class="sub">Ceza: ${s.penalties}</div>`;
- }else{
-   b.innerHTML=`<div class="title">MS YAYIN</div><div class="sub">Room: ${esc(s.room)}</div>`;
- }
- if(s.scoring&&!lastScoring) confetti();
- lastScoring=s.scoring;
+const q=new URLSearchParams(location.search);const room=(q.get('room')||'').toUpperCase();const type=q.get('type')||'puanlama';let lastGiftTime=0;
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function render(s){const el=document.getElementById('overlay');let html='';
+ if(type==='puanlama'){const left=s.scoring?Math.max(0,Math.ceil((s.scoreEndsAt-Date.now())/1000)):0;html=`<div class="overlay-title">⭐ PUANLAMA</div><div class="overlay-big">${s.average}</div><div class="overlay-sub">${s.participants} katılımcı • ${left} sn</div>`;}
+ else if(type==='racon'){const first=s.raconEntries?.[0];html=`<div class="overlay-title">👑 RACON KRALI</div>${first?`<div class="overlay-big">@${esc(first.username)}</div><div class="overlay-sub">🎁 ${esc(first.gift)} • ${first.count}x</div>`:'<div class="overlay-sub">Hediye bekleniyor...</div>'}`;}
+ else if(type==='mekan'){const first=s.mekanEntries?.[0];html=`<div class="overlay-title">🏠 MEKAN SAHİBİ</div>${first?`<div class="overlay-big">@${esc(first.username)}</div><div class="overlay-sub">🎁 ${esc(first.gift)} • ${first.count}x</div>`:'<div class="overlay-sub">Hediye bekleniyor...</div>'}`;}
+ else if(type==='begeni'){html=`<div class="overlay-title">❤️ BEĞENİ SIRALAMASI</div>`+(s.likes?.slice(0,10).map((x,i)=>`<div class="rank-line"><span>${i<3?['🥇','🥈','🥉'][i]:i+1+'.'} @${esc(x.username)}</span><b>${Number(x.likeCount).toLocaleString('tr-TR')} ❤️</b></div>`).join('')||'<div class="overlay-sub">Beğeni bekleniyor...</div>');}
+ else if(type==='win'){html=`<div class="overlay-title">🏆 WIN</div><div class="overlay-big">${String(s.wins).padStart(2,'0')}<span style="font-size:28px">/20</span></div><div class="overlay-sub">CEZA: -${s.penalty}</div>`;}
+ el.innerHTML=html;
+ if(s.lastGift&&s.lastGift.time!==lastGiftTime&&((type==='racon'&&s.lastGift.category==='racon')||(type==='mekan'&&s.lastGift.category==='mekan'))){lastGiftTime=s.lastGift.time;el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');}
 }
-socket.on("state",s=>{latestState=s;render(s)});
-setInterval(()=>{if(latestState && type==="puanlama" && latestState.scoring) render(latestState)},500);
+async function load(){if(!room){document.getElementById('overlay').innerHTML='<div class="overlay-sub">ROOM kodu eksik.</div>';return;}try{const r=await fetch('/api/state?room='+encodeURIComponent(room));const d=await r.json();if(d.ok)render(d.state);}catch(_){}}
+load();setInterval(load,1000);
 </script>
 </body>
 </html>

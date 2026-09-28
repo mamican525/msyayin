@@ -1,38 +1,39 @@
 <!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MS Yayın</title>
-<style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#090b10;color:#fff;font-family:Arial,sans-serif}
-.card{width:min(720px,92vw);padding:40px;border:1px solid #2a2f3a;border-radius:24px;background:#11141b;box-shadow:0 25px 80px #0009;text-align:center}
-h1{font-size:48px;margin:0 0 12px}h1 span{color:#e83b42}.muted{color:#9ca3b2}.btn{display:inline-block;background:#e83b42;color:#fff;text-decoration:none;border:0;border-radius:12px;padding:14px 20px;font-weight:800;cursor:pointer;margin-top:24px}
-.room{margin:24px 0;padding:16px;border-radius:12px;background:#0b0d13;font-size:26px;font-weight:900;letter-spacing:2px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MS Yayın</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-<div class="card">
-<h1>🔥 MS <span>YAYIN</span></h1>
-<p class="muted">Yayın sistemine başlamak için yeni bir oda oluştur.</p>
-<button class="btn" id="newRoom">🟢 YENİ YAYIN BAŞLAT</button>
-<div id="result"></div>
-</div>
-<script>
-document.getElementById("newRoom").addEventListener("click", async () => {
-  const btn=document.getElementById("newRoom"), result=document.getElementById("result");
-  btn.disabled=true; btn.textContent="Oda oluşturuluyor...";
-  try{
-    const r=await fetch("/api/room",{method:"POST"});
-    const d=await r.json();
-    if(!d.ok) throw new Error(d.error||"Oda oluşturulamadı.");
-    result.innerHTML=`<div class="room">${d.room}</div>`;
-    location.href=d.panelUrl;
-  }catch(e){
-    result.innerHTML=`<p style="color:#ff6970">${e.message}</p>`;
-    btn.disabled=false; btn.textContent="🟢 YENİ YAYIN BAŞLAT";
-  }
-});
-</script>
+<body class="landing">
+  <main class="landing-card">
+    <div class="brand">🔥 MS <span>YAYIN</span></div>
+    <h1>Yayın Yönetim Sistemi</h1>
+    <p>Yeni yayınını başlat. Room kodun otomatik oluşturulsun ve bütün overlay'ların aynı odaya bağlansın.</p>
+    <button id="createRoom" class="primary large">🟢 YENİ YAYIN BAŞLAT</button>
+    <div id="result" class="result hidden"></div>
+  </main>
+  <script>
+    const result = document.getElementById('result');
+    document.getElementById('createRoom').addEventListener('click', async () => {
+      const button = document.getElementById('createRoom');
+      button.disabled = true;
+      button.textContent = '⏳ ODA OLUŞTURULUYOR...';
+      result.classList.add('hidden');
+      try {
+        const response = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || 'Room oluşturulamadı.');
+        localStorage.setItem('ms_room', data.room);
+        window.location.href = '/panel?room=' + encodeURIComponent(data.room);
+      } catch (error) {
+        result.textContent = error.message;
+        result.classList.remove('hidden');
+        button.disabled = false;
+        button.textContent = '🟢 YENİ YAYIN BAŞLAT';
+      }
+    });
+  </script>
 </body>
 </html>
