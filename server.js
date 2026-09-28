@@ -27,6 +27,16 @@ const state = {
   penalty: 20
 };
 
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[ch] || ch));
+}
+
 function clean(v, max=80) {
   return String(v || "").trim().replace(/^@+/, "").slice(0,max);
 }
