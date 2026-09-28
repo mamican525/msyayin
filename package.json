@@ -1,15 +1,8 @@
 {
   "name": "msyayin",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "MS Yayın tek yayıncı paneli",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
-    "tiktok-live-connector": "1.2.2"
   }
 }
