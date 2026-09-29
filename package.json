@@ -1,6 +1,6 @@
 {
-  "name": "msyayin",
-  "version": "10.0.0",
+  "name": "msyayin-working-system-proxy",
+  "version": "1.0.0",
   "private": true,
   "main": "server.js",
   "scripts": {
@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "socket.io": "^4.8.1"
+    "http-proxy": "^1.18.1"
   }
 }
