@@ -1,19 +1,34 @@
-MS YAYIN – ÇALIŞAN TIKTOK SİSTEMİ ÜZERİNDEN
+MS YAYIN – SIFIRDAN TEMİZ KURULUM
 
-Bu sürüm yeni bir TikTok connector yazmaz.
-Daha önce çalışan:
-https://tiktok-puanlama.onrender.com/panel.html?room=MPRMBT
+Bu proje MS YAYIN için sıfırdan hazırlanmıştır.
+Selibon Medya dosyaları kullanılmaz.
+Room kodunu kullanıcı elle girmez; ilk açılışta otomatik oluşturulur.
 
-sistemini arka planda proxy eder.
-
-Kullanıcı tarafında Room kodu gösterilmez.
-Ana adres:
-https://msyayin.onrender.com/
+Dosyalar:
+- package.json
+- server.js
 
 Render:
-Build: npm install
-Start: npm start
+Build Command: npm install
+Start Command: npm start
 
-WORKING_ROOM ortam değişkeni verilmezse MPRMBT kullanılır.
+Ana adres:
+https://<senin-render-adresin>/
 
-Not: Bu paket, üçüncü taraf çalışan servisin erişilebilir olmasına bağlıdır.
+Yayın bağlantısı:
+Kullanıcı adı -> BAĞLAN
+
+Panel:
+- TikTok bağlantısı
+- Puanlama
+- Racon Kralları
+- Mekan Sahibi
+- Beğeni Sıralaması
+- WIN
+- Test Merkezi
+- Kullanım Rehberi
+
+Overlaylar aynı odadaki state'i kullanır.
+
+Not:
+Gerçek TikTok bağlantısı tiktok-live-connector paketine bağlıdır. TikTok tarafından bağlantı isteği reddedilirse panel bunu gerçek hata olarak gösterir; sahte "bağlı" yazmaz.
