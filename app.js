@@ -1,93 +1,55 @@
-const $ = s => document.querySelector(s);
-const stateKey = localStorage.getItem('msyayin_session') || '';
-let key = stateKey;
-let state = null;
-let socket = null;
-
+const MENUS=[
+  ['🔴','Yayın Bağlantısı','connection','TikTok yayınını bağla ve bağlantı durumunu gör.'],
+  ['⭐','Puanlama','puanlama','1–10 yorumlarını otomatik topla ve ortalamayı göster.'],
+  ['👑','Racon Kralları','racon','Seçtiğin hediyeyi gönderenleri otomatik listele.'],
+  ['🏠','Mekan Sahibi','mekan','Seçtiğin mekan hediyesini gönderenleri otomatik listele.'],
+  ['❤️','Beğeni Sıralaması','begeni','Canlı beğenileri kullanıcı bazında sırala.'],
+  ['🏆','WIN Sayacı','win','WIN sayısını ve hedefi yönet.'],
+  ['🧪','Test Merkezi','test','TikTok bağlantısı olmadan bütün ekranları dene.'],
+  ['📖','Kullanım Rehberi','guide','Sistemi nasıl kullanacağını gör.']
+];
+let key=localStorage.getItem('msyayin_session')||''; let state=null; let socket=null; let active=localStorage.getItem('msyayin_active')||'connection';
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const initials=n=>esc(String(n||'K').replace(/^@/,'').slice(0,2).toUpperCase());
+const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(window.__toast);window.__toast=setTimeout(()=>e.style.display='none',3000)};
+function avatar(name,url){return `<div class="avatar">${url?`<img src="${esc(url)}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.textContent='${initials(name)}'">`:initials(name)}</div>`}
+function row(name,val,url=''){return `<div class="row"><div class="user">${avatar(name,url)}<span class="user-name">${esc(name)}</span></div><span class="pill">${esc(val)}</span></div>`}
+function overlay(path){return `${location.origin}/overlay/${path}?session=${encodeURIComponent(state?.key||'')}`}
+function overlayBox(path,label){const u=overlay(path);return `<div class="overlay-box subcard"><div class="label">${label} OVERLAY LİNKİ</div><div class="linkbox"><input readonly value="${esc(u)}"><button class="btn ghost" onclick="copyText('${esc(u)}')">KOPYALA</button></div><div class="hint">OBS / TikTok Live Studio'da tarayıcı kaynağı olarak kullan.</div></div>`}
+window.copyText=u=>navigator.clipboard?.writeText(u).then(()=>toast('Overlay linki kopyalandı')).catch(()=>toast('Linki kutudan kopyalayabilirsin'));
 async function ensureSession(){
-  if(key){
-    const r = await fetch('/api/session/'+key);
-    if(r.ok){ state = await r.json(); return; }
-  }
-  const r = await fetch('/api/session/new');
-  const j = await r.json();
-  key = j.key; localStorage.setItem('msyayin_session', key);
-  const rs = await fetch('/api/session/'+key); state = await rs.json();
+  if(key){const r=await fetch('/api/session/'+key); if(r.ok){state=await r.json();return;}}
+  const r=await fetch('/api/session/new'); const j=await r.json(); key=j.key; localStorage.setItem('msyayin_session',key); state=await (await fetch('/api/session/'+key)).json();
 }
-
-function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(window.__tt);window.__tt=setTimeout(()=>e.style.display='none',3200)}
-function esc(t){return String(t??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function initials(n){return esc(String(n||'K').slice(0,2).toUpperCase())}
-function row(name, val){return `<div class="row"><div class="user"><div class="avatar">${initials(name)}</div><span>${esc(name)}</span></div><div class="pill">${esc(val)}</div></div>`}
-
-function render(){
-  if(!state)return;
-  $('#statusText').textContent=state.status||'Hazır';
-  $('#statusDot').className='dot '+(state.connected?'on':/hata/i.test(state.status||'')?'err':'');
-  $('#connectionHint').textContent=state.connected?`@${state.tiktokUsername} izleniyor`:state.status;
-  $('#username').value=state.tiktokUsername||$('#username').value;
-  $('#scoreSeconds').value=state.score.seconds;
-  const votes=state.score.votes||[]; 
-  const avg=votes.length?votes.reduce((a,x)=>a+Number(x.value||0),0)/votes.length:0;
-  $('#average').textContent=avg.toFixed(1);
-  $('#countVotes').textContent=votes.length;
-  $('#countdown').textContent=state.score.active&&state.score.endsAt?Math.max(0,Math.ceil((state.score.endsAt-Date.now())/1000))+' sn':state.score.active?'aktif':'—';
-  $('#voteList').innerHTML=votes.map(v=>row(v.username,v.value+' puan')).join('')||'<div class="muted">Henüz oy yok.</div>';
-  $('#raconList').innerHTML=(state.raconGifts||[]).map(v=>row(v.username,v.gift+(v.quantity>1?' ×'+v.quantity:''))).join('')||'<div class="muted">Seçili hediye bekleniyor.</div>';
-  $('#mekanList').innerHTML=(state.mekanGifts||[]).map(v=>row(v.username,v.gift+(v.quantity>1?' ×'+v.quantity:''))).join('')||'<div class="muted">Seçili hediye bekleniyor.</div>';
-  const likes=Object.entries(state.likes||{}).sort((a,b)=>b[1]-a[1]);
-  $('#top3').innerHTML=likes.slice(0,3).map((x,i)=>`<div class="rankbox"><b>#${i+1}</b><span>${esc(x[0])}</span><span>${x[1].toLocaleString('tr-TR')} beğeni</span></div>`).join('')||'<div class="muted">Beğeni bekleniyor.</div>'.repeat(3);
-  $('#likeList').innerHTML=likes.map(x=>row(x[0],x[1].toLocaleString('tr-TR')+' ❤️')).join('')||'<div class="muted">Henüz beğeni yok.</div>';
-  $('#wins').textContent=state.wins||0;
-  $('#targetWins').value=state.targetWins||20;
-  const giftNames=[...new Set([...(state.recentEvents||[]).filter(x=>x.type==='gift').map(x=>x.gift).filter(Boolean)])];
-  for(const sel of ['#raconGift','#mekanGift']){
-    const cur=$(sel).value;
-    $(sel).innerHTML='<option value="">Gelen hediyelerden seç</option>'+giftNames.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('');
-    $(sel).value=cur;
-  }
-  $('#scoreOverlay').href='/overlay/puanlama?room='+state.key;
-  $('#raconOverlay').href='/overlay/racon?room='+state.key;
-  $('#mekanOverlay').href='/overlay/mekan?room='+state.key;
-  $('#likeOverlay').href='/overlay/begeni?room='+state.key;
-  $('#winOverlay').href='/overlay/win?room='+state.key;
+async function post(url,body={}){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,...body})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'İşlem başarısız');return j}
+function status(){const on=!!state?.connected;const err=/hata|engellendi|canlı görünmüyor|kesildi/i.test(state?.status||'');$('#sideStatus').textContent=on?'TIKTOK LIVE BAĞLI':err?'BAĞLANTI SORUNU':'BAĞLANTI HAZIR';$('#sideDot').parentElement.className='live-chip '+(on?'on':err?'err':'');$('#headerUser').textContent=state?.tiktokUsername?(on?'@'+state.tiktokUsername+' • LIVE':'@'+state.tiktokUsername):'Bağlı değil';$('#headerUser').className='header-user '+(on?'on':'')}
+function buildNav(){const nav=$('#nav');nav.innerHTML=MENUS.map(([ico,name,k])=>`<button class="${active===k?'active':''}" data-key="${k}"><span>${ico}</span><span>${name}</span></button>`).join('');nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{active=b.dataset.key;localStorage.setItem('msyayin_active',active);render()})}
+function setHeader(){const m=MENUS.find(x=>x[2]===active)||MENUS[0];$('#pageTitle').textContent=m[1];$('#pageSubtitle').textContent=m[3]}
+function renderConnection(){return `<div class="grid2"><section class="card card-pad"><div class="section-head"><h2>TikTok LIVE Bağlantısı</h2></div><p class="hero-title">Yayını tek kullanıcı adıyla bağla.</p><p class="hero-copy">Room kodu yok. Sadece canlı yayındaki TikTok kullanıcı adını yaz. Bağlantı sunucu tarafında Chromium ile açılır ve canlı sayfadaki olaylar gözlemlenir.</p><label class="label">TikTok kullanıcı adı</label><div class="input-row"><input id="username" value="${esc(state?.tiktokUsername||'')}" placeholder="@kullaniciadi"><button class="btn primary" id="connectBtn">BAĞLAN</button><button class="btn danger" id="disconnectBtn">KES</button></div><div class="status-line"><i id="statusDot" class="status-dot ${state?.connected?'on':''}"></i><span>${esc(state?.status||'Hazır')}</span></div><div class="hint">Gerçek bağlantıda canlı sayfa bulunamazsa sistem bunu "canlı görünmüyor" olarak gösterir; sahte "bağlı" durumu kullanmaz.</div></section><section class="card card-pad"><div class="section-head"><h2>Bağlantı Bilgisi</h2></div><div class="subcard"><div class="label">KULLANICI</div><div style="font-size:22px;font-weight:900">${state?.tiktokUsername?`@${esc(state.tiktokUsername)}`:'—'}</div></div><div class="subcard" style="margin-top:10px"><div class="label">SON OLAY</div><div class="muted">${state?.lastEventAt?new Date(state.lastEventAt).toLocaleTimeString('tr-TR'):'Henüz olay alınmadı.'}</div></div><div class="note">TikTok'un web tarafındaki değişiklikleri ve güvenlik kontrolleri dışarıdan yönetilemediği için panel yalnızca tarayıcıda gerçekten bulunan LIVE ve olay akışını "bağlı" sayar.</div></section></div>`}
+function renderScore(){const v=state?.score?.votes||[];const avg=v.length?v.reduce((a,x)=>a+Number(x.value||0),0)/v.length:0;const active=state?.score?.active;const left=active&&state.score.endsAt?Math.max(0,Math.ceil((state.score.endsAt-Date.now())/1000)):'—';return `<section class="card card-pad"><div class="section-head"><h2>⭐ Puanlama</h2><a class="overlay-link" href="${esc(overlay('puanlama'))}" target="_blank">OVERLAY ↗</a></div><div class="metric"><div class="num">${avg.toFixed(1)}</div><div class="cap">ORTALAMA</div></div><div class="toolbar" style="margin-top:18px"><div class="small-field"><label class="label">SÜRE (SN)</label><input id="scoreSeconds" type="number" min="5" max="600" value="${state.score.seconds}"></div><button class="btn primary" id="scoreStart">${active?'PUANLAMA DEVAM EDİYOR':'PUANLAMA BAŞLAT'}</button><div class="subcard" style="min-width:120px;padding:10px 12px"><div class="label">SAYAÇ</div><b>${esc(String(left))}</b></div></div><div class="hint">${v.length} oy • Yeni oylar en üste gelir, eski oylar silinmez.</div><div class="list">${v.map(x=>row(x.username,x.value+' puan',x.avatarUrl)).join('')||'<div class="empty">Henüz oy yok.</div>'}</div></section>${overlayBox('puanlama','Puanlama')}`}
+function giftSelect(id,current){const opts=state?.giftOptions||[];return `<select id="${id}"><option value="">Gelen hediyelerden seç</option>${opts.map(g=>`<option ${normalize(g)===normalize(current)?'selected':''} value="${esc(g)}">${esc(g)}</option>`).join('')}</select>`}
+function normalize(v){return String(v||'').trim().toLowerCase()}
+function renderRacon(){return `<section class="card card-pad"><div class="section-head"><h2>👑 Racon Kralları</h2><a class="overlay-link" href="${esc(overlay('racon'))}" target="_blank">OVERLAY ↗</a></div><label class="label">RACON HEDİYESİ</label>${giftSelect('raconGift',state?.raconGift)}<div class="hint">TikTok'tan hediye geldiğinde önce burada görünür. Seçtiğin hediye gelirse gönderen otomatik eklenir.</div><div class="list">${(state?.raconGifts||[]).map(x=>row(x.username,(x.gift||'')+(x.quantity>1?' ×'+x.quantity:''),x.avatarUrl)).join('')||'<div class="empty">Seçili hediye bekleniyor.</div>'}</div></section>${overlayBox('racon','Racon Kralları')}`}
+function renderMekan(){return `<section class="card card-pad"><div class="section-head"><h2>🏠 Mekan Sahibi</h2><a class="overlay-link" href="${esc(overlay('mekan'))}" target="_blank">OVERLAY ↗</a></div><label class="label">MEKAN HEDİYESİ</label>${giftSelect('mekanGift',state?.mekanGift)}<div class="hint">Seçtiğin hediyeyi kim gönderirse kullanıcı adı otomatik olarak burada listelenir.</div><div class="list">${(state?.mekanGifts||[]).map(x=>row(x.username,(x.gift||'')+(x.quantity>1?' ×'+x.quantity:''),x.avatarUrl)).join('')||'<div class="empty">Seçili hediye bekleniyor.</div>'}</div></section>${overlayBox('mekan','Mekan Sahibi')}`}
+function likeEntries(){return Object.entries(state?.likes||{}).sort((a,b)=>(b[1]?.count||0)-(a[1]?.count||0))}
+function renderLikes(){const l=likeEntries();return `<section class="card card-pad"><div class="section-head"><h2>❤️ Beğeni Sıralaması</h2><a class="overlay-link" href="${esc(overlay('begeni'))}" target="_blank">OVERLAY ↗</a></div><div class="rank3">${[0,1,2].map(i=>l[i]?`<div class="rank"><b>#${i+1}</b>${avatar(l[i][0],l[i][1]?.avatarUrl)}<span>${esc(l[i][0])}</span><span>${(l[i][1]?.count||0).toLocaleString('tr-TR')} ❤️</span></div>`:`<div class="rank"><b>#${i+1}</b><span>—</span><span>Bekleniyor</span></div>`).join('')}</div><div class="list">${l.slice(3).map(([n,v])=>row(n,(v?.count||0).toLocaleString('tr-TR')+' ❤️',v?.avatarUrl)).join('')||'<div class="empty">Henüz beğeni yok.</div>'}</div></section>${overlayBox('begeni','Beğeni')}`}
+function renderWin(){return `<section class="card card-pad"><div class="section-head"><h2>🏆 WIN Sayacı</h2><a class="overlay-link" href="${esc(overlay('win'))}" target="_blank">OVERLAY ↗</a></div><div class="win"><div class="num">${state?.wins||0}</div><div class="goal">/ ${state?.targetWins||20} WIN</div></div><div class="actions"><button class="btn ghost" id="winMinus">−1</button><button class="btn primary" id="winPlus">+1 WIN</button></div><div style="margin-top:15px"><label class="label">HEDEF WIN</label><input id="targetWins" type="number" min="1" max="999" value="${state?.targetWins||20}"></div></section>${overlayBox('win','WIN')}`}
+function renderTest(){return `<section class="card card-pad"><div class="section-head"><h2>🧪 Test Merkezi</h2></div><p class="muted">TikTok bağlantısı olmadan örnek olaylar üretir. Gerçek yayın verisi değildir.</p><div class="subcard" style="margin-top:14px"><label class="label">TEST KULLANICISI</label><input id="testUser" value="test_kullanici"><div class="test-grid" style="margin-top:12px"><button class="btn" data-t="vote" data-v="10">10 PUAN</button><button class="btn" data-t="vote" data-v="8">8 PUAN</button><button class="btn" data-t="gift">RACON HEDİYE</button><button class="btn" data-t="like">+50 BEĞENİ</button><button class="btn" data-t="win">+1 WIN</button><button class="btn danger" id="resetAll">SIFIRLA</button></div></div><div class="note">Puan testi için oylama aktif değilse test otomatik olarak örnek turu aktif eder.</div></section>`}
+function renderGuide(){return `<section class="card card-pad"><div class="section-head"><h2>📖 Kullanım Rehberi</h2></div><div class="guide-list">${[['1','Yayın Bağlantısı','TikTok kullanıcı adını yaz ve BAĞLAN’a bas. Room kodu istemez.'],['2','Puanlama','Süreyi belirle ve turu başlat. Yorumlarda tek başına 1–10 yazılması puan olarak alınır.'],['3','Racon / Mekan','Gelen hediyelerden birini seç. Aynı hediye geldiğinde gönderen otomatik listelenir.'],['4','Beğeni','Canlı sayfadaki beğeni bildirimleri yakalanır ve kullanıcı bazında toplanır.'],['5','WIN','WIN sayacını +1 / −1 ile yönet, hedefi değiştirebilirsin.'],['6','Overlay','Her modülün linkini kopyala ve OBS / TikTok Live Studio tarayıcı kaynağına ekle.']].map(x=>`<div class="guide-item"><b class="guide-num">${x[0]}</b><div><b>${x[1]}</b><span>${x[2]}</span></div></div>`).join('')}</div><div class="note">Bağlantı yöntemi TikTok'un yayın web sayfasını kendi sunucundaki Chromium oturumu üzerinden gözlemler. TikTok tarafı captcha veya erişim engeli verirse panel bunu bağlıymış gibi göstermemeye çalışır.</div></section>`}
+function bind(){
+  const c=$('#connectBtn'); if(c)c.onclick=async()=>{try{await post('/api/connect',{username:$('#username').value});toast('TikTok bağlantısı başlatıldı. Durum birkaç saniye içinde güncellenecek.')}catch(e){toast(e.message)}};
+  const d=$('#disconnectBtn'); if(d)d.onclick=async()=>{try{await post('/api/disconnect');toast('Bağlantı kesildi.')}catch(e){toast(e.message)}};
+  const ss=$('#scoreSeconds'); if(ss)ss.onchange=async()=>{try{await post('/api/settings/score',{seconds:ss.value})}catch(e){toast(e.message)}};
+  const sb=$('#scoreStart'); if(sb)sb.onclick=async()=>{try{await post('/api/score/start');toast('Puanlama başladı.')}catch(e){toast(e.message)}};
+  const rg=$('#raconGift'); if(rg)rg.onchange=async()=>{try{await post('/api/gift/select',{kind:'racon',gift:rg.value})}catch(e){toast(e.message)}};
+  const mg=$('#mekanGift'); if(mg)mg.onchange=async()=>{try{await post('/api/gift/select',{kind:'mekan',gift:mg.value})}catch(e){toast(e.message)}};
+  const wp=$('#winPlus'); if(wp)wp.onclick=()=>post('/api/win',{delta:1,target:$('#targetWins').value}).catch(e=>toast(e.message));
+  const wm=$('#winMinus'); if(wm)wm.onclick=()=>post('/api/win',{delta:-1,target:$('#targetWins').value}).catch(e=>toast(e.message));
+  const tw=$('#targetWins'); if(tw)tw.onchange=()=>post('/api/win',{delta:0,target:tw.value}).catch(e=>toast(e.message));
+  document.querySelectorAll('[data-t]').forEach(b=>b.onclick=async()=>{try{await post('/api/test',{type:b.dataset.t,value:b.dataset.v||'',username:$('#testUser')?.value||'test_kullanici',gift:'Racon Hediye',count:50,delta:1});toast('Test olayı gönderildi.')}catch(e){toast(e.message)}});
+  const reset=$('#resetAll'); if(reset)reset.onclick=async()=>{try{await post('/api/reset');toast('Veriler sıfırlandı.')}catch(e){toast(e.message)}};
 }
-
-async function post(url, body){
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,...body})});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(j.error||'İşlem başarısız');
-  return j;
-}
-
-async function init(){
-  try{await ensureSession(); render();
-    socket=io(); socket.on('connect',()=>socket.emit('join',key));
-    socket.on('state:update',x=>{state=x;render()});
-    socket.on('event:new',x=>{ if(state){state.recentEvents.unshift(x);state.recentEvents=state.recentEvents.slice(0,40);render();} });
-  }catch(e){toast(e.message)}
-}
-
-$('#connectBtn').onclick=async()=>{try{await post('/api/connect',{username:$('#username').value});toast('Bağlantı başlatıldı. TikTok LIVE sayfası açılıyor…')}catch(e){toast(e.message)}};
-$('#disconnectBtn').onclick=async()=>{try{await post('/api/disconnect',{});toast('Bağlantı kesildi.')}catch(e){toast(e.message)}};
-$('#scoreSeconds').onchange=async()=>{try{await post('/api/settings/score',{seconds:$('#scoreSeconds').value})}catch(e){toast(e.message)}};
-$('#scoreStart').onclick=async()=>{try{await post('/api/score/start',{});toast('Puanlama başladı.')}catch(e){toast(e.message)}};
-$('#raconGift').onchange=async e=>{try{await post('/api/gift/select',{kind:'racon',gift:e.target.value})}catch(x){toast(x.message)}};
-$('#mekanGift').onchange=async e=>{try{await post('/api/gift/select',{kind:'mekan',gift:e.target.value})}catch(x){toast(x.message)}};
-$('#winPlus').onclick=async()=>{try{await post('/api/win',{delta:1,target:$('#targetWins').value})}catch(e){toast(e.message)}};
-$('#winMinus').onclick=async()=>{try{await post('/api/win',{delta:-1,target:$('#targetWins').value})}catch(e){toast(e.message)}};
-$('#targetWins').onchange=async()=>{try{await post('/api/win',{delta:0,target:$('#targetWins').value})}catch(e){toast(e.message)}};
-
-document.querySelectorAll('[data-test]').forEach(btn=>btn.onclick=async()=>{
-  const kind=btn.dataset.test;
-  try{
-    if(kind==='vote') await post('/api/test',{type:'vote',username:'TestPuan',value:10});
-    if(kind==='vote9') await post('/api/test',{type:'vote',username:'TestPuan2',value:9});
-    if(kind==='gift') await post('/api/test',{type:'gift',username:'RaconTest',gift:'Gül'});
-    if(kind==='like') await post('/api/test',{type:'like',username:'LikeTest',count:50});
-    if(kind==='win') await post('/api/test',{type:'win',username:'WinTest',delta:1});
-  }catch(e){toast(e.message)}
-});
-$('#clearData').onclick=async()=>{location.reload()};
-setInterval(()=>render(),500);
-init();
+function render(){buildNav();setHeader();status();let html='';if(active==='connection')html=renderConnection();else if(active==='puanlama')html=renderScore();else if(active==='racon')html=renderRacon();else if(active==='mekan')html=renderMekan();else if(active==='begeni')html=renderLikes();else if(active==='win')html=renderWin();else if(active==='test')html=renderTest();else html=renderGuide();$('#content').innerHTML=html;bind()}
+async function init(){try{await ensureSession();render();socket=io();socket.on('connect',()=>socket.emit('join',key));socket.on('state:update',x=>{state=x;render()});socket.on('event:new',x=>{if(state){state.recentEvents.unshift(x);state.recentEvents=state.recentEvents.slice(0,60);if(active==='puanlama'||active==='racon'||active==='mekan'||active==='begeni')render()}})}catch(e){toast(e.message)}}
+init();setInterval(()=>{if(state&&state.score?.active&&active==='puanlama')render()},1000);

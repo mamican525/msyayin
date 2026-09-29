@@ -1,14 +1,10 @@
 {
   "name": "ms-yayin",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "commonjs",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=20"
-  },
+  "scripts": {"start": "node server.js"},
+  "engines": {"node": ">=20"},
   "dependencies": {
     "@sparticuz/chromium": "^138.0.2",
     "express": "^5.1.0",

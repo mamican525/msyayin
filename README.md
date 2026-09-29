@@ -1,24 +1,17 @@
-# MS YAYIN
+# MS YAYIN v2.0
 
-TikTok LIVE yayın yönetim paneli.
+Render için hazırlanmış sürüm.
 
-## Sistem
-- TikTok kullanıcı adı ile bağlanma
-- Server-side browser observer (Puppeteer + Chromium)
-- Puanlama (1-10, süre ayarlı)
-- Racon Kralları
-- Mekan Sahibi
-- Beğeni Sıralaması
-- WIN Sayacı
-- Test Merkezi
-- OBS / TikTok Live Studio overlay linkleri
+Build: `npm install`
+Start: `npm start`
 
-## Render
-Build Command:
-`npm install`
+Özellikler:
+- Sol menü, tek modül görünümü
+- TikTok kullanıcı adıyla bağlantı, kullanıcıdan room istemez
+- Chromium tabanlı TikTok LIVE gözlemleme
+- Puanlama, Racon Kralları, Mekan Sahibi, Beğeni Sıralaması, WIN, Test Merkezi
+- Her modül için overlay linki
+- Puanlama oyları yeni oy en üste gelecek şekilde saklanır
+- Racon/Mekan seçili hediye geldiğinde kullanıcı otomatik eklenir
 
-Start Command:
-`npm start`
-
-## Önemli
-TikTok'un web canlı yayın yapısı zaman zaman değişebilir veya otomatik tarayıcı trafiğini engelleyebilir. Bu proje, tiktok-live-connector yerine Chromium üzerinden herkese açık canlı yayın sayfasındaki ağ olaylarını gözlemlemeyi dener. TikTok tarafından bloklanırsa panel yine Test Merkezi ve overlay'lerle çalışır; canlı veri için sunucu logunda hata görünür.
+Not: TikTok'un kendi web sayfası captcha, erişim engeli veya canlı olmayan hesap durumu verirse sistem bunu bağlı gibi göstermemeye çalışır. TikTok web DOM / websocket yapısı değişirse olay yakalama katmanının güncellenmesi gerekebilir.

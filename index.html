@@ -1,98 +1,22 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MS YAYIN</title>
-  <link rel="stylesheet" href="/style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MS YAYIN</title><link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">MS</span><span>MS YAYIN</span></div>
-    <div class="top-status"><span id="statusDot" class="dot"></span><span id="statusText">Hazır</span></div>
-  </header>
-
-  <main class="wrap">
-    <section class="hero card">
-      <div>
-        <div class="eyebrow">TIKTOK LIVE CONTROL</div>
-        <h1>Yayınını tek panelden yönet.</h1>
-        <p>Bağlan, puanlamayı başlat, hediye sahiplerini ve beğeni sıralamasını canlı takip et.</p>
-      </div>
-      <div class="connect">
-        <label>TikTok kullanıcı adı</label>
-        <div class="connect-row">
-          <input id="username" placeholder="ör. muhammet_sahin" autocomplete="off">
-          <button id="connectBtn" class="primary">BAĞLAN</button>
-          <button id="disconnectBtn" class="ghost">KES</button>
-        </div>
-        <div class="hint" id="connectionHint">Oturum hazırlanıyor…</div>
-      </div>
-    </section>
-
-    <section class="grid">
-      <article class="card panel" id="scoreCard">
-        <div class="panel-head"><h2>⭐ Puanlama</h2><a target="_blank" id="scoreOverlay">Overlay ↗</a></div>
-        <div class="score-main"><div id="average">0.0</div><span>ORTALAMA</span></div>
-        <div class="score-tools">
-          <label>Süre (sn)<input id="scoreSeconds" type="number" min="5" max="600" value="15"></label>
-          <button id="scoreStart" class="primary">PUANLAMA BAŞLAT</button>
-        </div>
-        <div class="mini"><span id="countVotes">0</span> oy · <span id="countdown">—</span></div>
-        <div class="list" id="voteList"></div>
-      </article>
-
-      <article class="card panel">
-        <div class="panel-head"><h2>👑 Racon Kralları</h2><a target="_blank" id="raconOverlay">Overlay ↗</a></div>
-        <label>Racon hediyesi</label>
-        <select id="raconGift"><option value="">Gelen hediyelerden seç</option></select>
-        <div class="list" id="raconList"></div>
-      </article>
-
-      <article class="card panel">
-        <div class="panel-head"><h2>🏠 Mekan Sahibi</h2><a target="_blank" id="mekanOverlay">Overlay ↗</a></div>
-        <label>Mekan hediyesi</label>
-        <select id="mekanGift"><option value="">Gelen hediyelerden seç</option></select>
-        <div class="list" id="mekanList"></div>
-      </article>
-
-      <article class="card panel">
-        <div class="panel-head"><h2>❤️ Beğeni Sıralaması</h2><a target="_blank" id="likeOverlay">Overlay ↗</a></div>
-        <div class="top3" id="top3"></div>
-        <div class="list" id="likeList"></div>
-      </article>
-
-      <article class="card panel win-card">
-        <div class="panel-head"><h2>🏆 WIN Sayacı</h2><a target="_blank" id="winOverlay">Overlay ↗</a></div>
-        <div class="win-number"><span id="wins">0</span><small>/ <input id="targetWins" value="20" type="number" min="1" max="999"></small></div>
-        <div class="win-actions"><button id="winMinus" class="ghost">−1</button><button id="winPlus" class="primary">+1 WIN</button></div>
-      </article>
-
-      <article class="card panel">
-        <div class="panel-head"><h2>🧪 Test Merkezi</h2></div>
-        <p class="muted">TikTok bağlantısı olmadan bütün ekranları deneyebilirsin.</p>
-        <div class="test-grid">
-          <button data-test="vote">10 puan</button><button data-test="vote9">9 puan</button>
-          <button data-test="gift">Racon hediye</button><button data-test="like">+50 beğeni</button>
-          <button data-test="win">+1 WIN</button><button id="clearData">Sıfırla</button>
-        </div>
-      </article>
-    </section>
-
-    <section class="card guide">
-      <div class="panel-head"><h2>📖 Kullanım Rehberi</h2></div>
-      <div class="steps">
-        <div><b>1</b><span>TikTok kullanıcı adını gir ve BAĞLAN'a bas.</span></div>
-        <div><b>2</b><span>Puanlama süresini ayarla ve turu başlat. Yorumlarda 1–10 arası puanlar okunur.</span></div>
-        <div><b>3</b><span>Canlı gelen hediyelerden Racon ve Mekan hediyesini seç.</span></div>
-        <div><b>4</b><span>Overlay linklerini OBS / TikTok Live Studio tarayıcı kaynağına ekle.</span></div>
-      </div>
-      <div class="note">Not: TikTok web canlı yayın altyapısı değişebildiği için canlı olay yakalama sunucu tarafında Chromium ile yapılır. Test Merkezi her zaman kullanılabilir.</div>
-    </section>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">MS</div><div><strong>MS YAYIN</strong><span>YAYIN YÖNETİMİ</span></div></div>
+    <div class="live-chip"><i id="sideDot"></i><span id="sideStatus">BAĞLANTI HAZIR</span></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">TikTok LIVE • MS YAYIN</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div><div class="eyebrow">MS YAYIN CONTROL</div><h1 id="pageTitle">Yayın Bağlantısı</h1><p id="pageSubtitle">TikTok yayınını bağla ve bütün araçları buradan yönet.</p></div><div class="header-user" id="headerUser">Bağlı değil</div></header>
+    <section id="content"></section>
   </main>
-
-  <div id="toast"></div>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js"></script>
-</body>
-</html>
+</div>
+<div id="toast"></div>
+<script src="/socket.io/socket.io.js"></script><script src="/app.js"></script>
+</body></html>
