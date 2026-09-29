@@ -1,0 +1,14 @@
+const params=new URLSearchParams(location.search);const room=params.get('room');
+const root=document.getElementById('app');
+let state={score:{votes:[]},likes:{},raconGifts:[],mekanGifts:[],wins:0,targetWins:20};
+function esc(t){return String(t??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]) )};function initial(n){return esc(String(n||'K').slice(0,2).toUpperCase())}
+function item(name,val){return `<div class="item"><div class="user"><div class="avatar">${initial(name)}</div><span>${esc(name)}</span></div><div class="score">${esc(val)}</div></div>`}
+function paint(){if(!room)return;const p=location.pathname;let html='';
+ if(p.includes('puanlama')){const v=state.score?.votes||[];const a=v.length?v.reduce((x,y)=>x+Number(y.value),0)/v.length:0;const left=state.score?.active&&state.score.endsAt?Math.max(0,Math.ceil((state.score.endsAt-Date.now())/1000))+' sn':'HAZIR';html=`<div class="stage"><div class="box"><div class="title">⭐ MS YAYIN · PUANLAMA</div><div class="sub">Canlı oylar</div><div class="big">${a.toFixed(1)}</div><div class="center"><span class="tag">${v.length} OY</span> <span class="tag">${left}</span></div><div class="list">${v.slice(0,10).map(x=>item(x.username,x.value+' PUAN')).join('')||'<div class="empty">Henüz oy yok.</div>'}</div></div></div>`}
+ else if(p.includes('racon')){html=`<div class="stage"><div class="box"><div class="title">👑 RACON KRALLARI</div><div class="sub">Seçili hediye sahipleri</div><div class="list">${(state.raconGifts||[]).slice(0,12).map(x=>item(x.username,x.gift)).join('')||'<div class="empty">Hediye bekleniyor.</div>'}</div></div></div>`}
+ else if(p.includes('mekan')){html=`<div class="stage"><div class="box"><div class="title">🏠 MEKAN SAHİBİ</div><div class="sub">Seçili hediye sahipleri</div><div class="list">${(state.mekanGifts||[]).slice(0,12).map(x=>item(x.username,x.gift)).join('')||'<div class="empty">Hediye bekleniyor.</div>'}</div></div></div>`}
+ else if(p.includes('begeni')){const l=Object.entries(state.likes||{}).sort((a,b)=>b[1]-a[1]);html=`<div class="stage"><div class="box"><div class="title">❤️ BEĞENİ SIRALAMASI</div><div class="grid">${l.slice(0,3).map((x,i)=>`<div class="rank"><b>#${i+1}</b><span>${esc(x[0])}</span><span>${x[1].toLocaleString('tr-TR')} ❤️</span></div>`).join('')||'<div class="empty">Beğeni bekleniyor.</div>'}</div><div class="list">${l.slice(3,15).map(x=>item(x[0],x[1]+' ❤️')).join('')}</div></div></div>`}
+ else {html=`<div class="stage"><div class="box"><div class="title">🏆 MS YAYIN · WIN</div><div class="win">${state.wins||0}</div><div class="slash">/ ${state.targetWins||20} WIN</div></div></div>`}
+ root.innerHTML=html;
+}
+if(room){const s=io();s.on('connect',()=>s.emit('join',room));s.on('state:update',x=>{state=x;paint()});s.on('event:new',()=>{});}paint();setInterval(paint,500);
